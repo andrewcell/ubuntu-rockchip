@@ -72,7 +72,7 @@ for type in $target; do
     rm -rf ${chroot_dir}
     mkdir -p ${chroot_dir}
 
-    tar -xpJf ubuntu-22.04.3-${type}-arm64.rootfs.tar.xz -C ${chroot_dir}
+    tar -xpJf ubuntu-${RELASE_VERSION}-${type}-arm64.rootfs.tar.xz -C ${chroot_dir}
 
     # Mount the temporary API filesystems
     mkdir -p ${chroot_dir}/{proc,sys,run,dev,dev/pts}
@@ -82,23 +82,25 @@ for type in $target; do
     mount -o bind /dev/pts ${chroot_dir}/dev/pts
 
     if [ "${KERNEL_TARGET}" == "bsp" ]; then
-        if [ "${OVERLAY_PREFIX}" == "rk3588" ]; then
-            # Pin and add panfork mesa ppa
-            cp ${overlay_dir}/etc/apt/preferences.d/panfork-mesa-ppa ${chroot_dir}/etc/apt/preferences.d/panfork-mesa-ppa
-            chroot ${chroot_dir} /bin/bash -c "add-apt-repository -y ppa:liujianfeng1994/panfork-mesa"
+        if [ "${RELEASE}" == "jammy" ]; then
+            if [ "${OVERLAY_PREFIX}" == "rk3588" ]; then
+                # Pin and add panfork mesa ppa
+                cp ${overlay_dir}/etc/apt/preferences.d/panfork-mesa-ppa ${chroot_dir}/etc/apt/preferences.d/panfork-mesa-ppa
+                chroot ${chroot_dir} /bin/bash -c "add-apt-repository -y ppa:liujianfeng1994/panfork-mesa"
 
-            # Set cpu governor to performance
-            cp ${overlay_dir}/usr/lib/systemd/system/cpu-governor-performance.service ${chroot_dir}/usr/lib/systemd/system/cpu-governor-performance.service
-            chroot ${chroot_dir} /bin/bash -c "systemctl enable cpu-governor-performance"
+                # Set cpu governor to performance
+                cp ${overlay_dir}/usr/lib/systemd/system/cpu-governor-performance.service ${chroot_dir}/usr/lib/systemd/system/cpu-governor-performance.service
+                chroot ${chroot_dir} /bin/bash -c "systemctl enable cpu-governor-performance"
 
-            # Set gpu governor to performance
-            cp ${overlay_dir}/usr/lib/systemd/system/gpu-governor-performance.service ${chroot_dir}/usr/lib/systemd/system/gpu-governor-performance.service
-            chroot ${chroot_dir} /bin/bash -c "systemctl enable gpu-governor-performance"
+                # Set gpu governor to performance
+                cp ${overlay_dir}/usr/lib/systemd/system/gpu-governor-performance.service ${chroot_dir}/usr/lib/systemd/system/gpu-governor-performance.service
+                chroot ${chroot_dir} /bin/bash -c "systemctl enable gpu-governor-performance"
+            fi
+
+            # Pin and add rockchip multimedia ppa
+            cp ${overlay_dir}/etc/apt/preferences.d/rockchip-multimedia-ppa ${chroot_dir}/etc/apt/preferences.d/rockchip-multimedia-ppa
+            chroot ${chroot_dir} /bin/bash -c "add-apt-repository -y ppa:liujianfeng1994/rockchip-multimedia"
         fi
-
-        # Pin and add rockchip multimedia ppa
-        cp ${overlay_dir}/etc/apt/preferences.d/rockchip-multimedia-ppa ${chroot_dir}/etc/apt/preferences.d/rockchip-multimedia-ppa
-        chroot ${chroot_dir} /bin/bash -c "add-apt-repository -y ppa:liujianfeng1994/rockchip-multimedia"
 
         # Download and update installed packages
         chroot ${chroot_dir} /bin/bash -c "apt-get -y update && apt-get -y upgrade && apt-get -y dist-upgrade"
@@ -115,56 +117,58 @@ for type in $target; do
         cp ${overlay_dir}/usr/share/initramfs-tools/hooks/rtl-bt ${chroot_dir}/usr/share/initramfs-tools/hooks/rtl-bt
 
         if [[ $type == "preinstalled-desktop" ]]; then
-            if [ "${OVERLAY_PREFIX}" == "rk3588" ]; then
-                # Install rkaiq and rkisp
-                cp -r ../packages/rkaiq/camera_engine_*_arm64.deb ${chroot_dir}/tmp
-                chroot ${chroot_dir} /bin/bash -c "dpkg -i /tmp/camera_engine_rkaiq_rk3588_1.0.3_arm64.deb"
-                chroot ${chroot_dir} /bin/bash -c "dpkg -i /tmp/camera_engine_rkaiq_rk3588_update_arm64.deb"
-                chroot ${chroot_dir} /bin/bash -c "dpkg -i /tmp/camera_engine_rkisp-v2.2.0_arm64.deb"
-                rm -f ${chroot_dir}/tmp/camera_engine_*_arm64.deb
+            if [ "${RELEASE}" == "jammy" ]; then
+                if [ "${OVERLAY_PREFIX}" == "rk3588" ]; then
+                    # Install rkaiq and rkisp
+                    cp -r ../packages/rkaiq/camera_engine_*_arm64.deb ${chroot_dir}/tmp
+                    chroot ${chroot_dir} /bin/bash -c "dpkg -i /tmp/camera_engine_rkaiq_rk3588_1.0.3_arm64.deb"
+                    chroot ${chroot_dir} /bin/bash -c "dpkg -i /tmp/camera_engine_rkaiq_rk3588_update_arm64.deb"
+                    chroot ${chroot_dir} /bin/bash -c "dpkg -i /tmp/camera_engine_rkisp-v2.2.0_arm64.deb"
+                    rm -f ${chroot_dir}/tmp/camera_engine_*_arm64.deb
 
-                # Hack for GDM to restart on first HDMI hotplug
-                mkdir -p ${chroot_dir}/usr/lib/scripts
-                cp ${overlay_dir}/usr/lib/scripts/gdm-hack.sh ${chroot_dir}/usr/lib/scripts/gdm-hack.sh
-                cp ${overlay_dir}/etc/udev/rules.d/99-gdm-hack.rules ${chroot_dir}/etc/udev/rules.d/99-gdm-hack.rules
+                    # Hack for GDM to restart on first HDMI hotplug
+                    mkdir -p ${chroot_dir}/usr/lib/scripts
+                    cp ${overlay_dir}/usr/lib/scripts/gdm-hack.sh ${chroot_dir}/usr/lib/scripts/gdm-hack.sh
+                    cp ${overlay_dir}/etc/udev/rules.d/99-gdm-hack.rules ${chroot_dir}/etc/udev/rules.d/99-gdm-hack.rules
 
-                chroot ${chroot_dir} /bin/bash -c "apt-get -y install libwidevinecdm librockchip-mpp1 librockchip-mpp-dev librockchip-vpu0 libv4l-rkmpp librist-dev librist4 librga2 librga-dev rist-tools rockchip-mpp-demos rockchip-multimedia-config gstreamer1.0-rockchip1 chromium-browser mali-g610-firmware malirun"
-            else
-                chroot ${chroot_dir} /bin/bash -c "apt-get -y install libwidevinecdm rockchip-multimedia-config chromium-browser"
+                    chroot ${chroot_dir} /bin/bash -c "apt-get -y install libwidevinecdm librockchip-mpp1 librockchip-mpp-dev librockchip-vpu0 libv4l-rkmpp librist-dev librist4 librga2 librga-dev rist-tools rockchip-mpp-demos rockchip-multimedia-config gstreamer1.0-rockchip1 chromium-browser mali-g610-firmware malirun"
+                else
+                    chroot ${chroot_dir} /bin/bash -c "apt-get -y install libwidevinecdm rockchip-multimedia-config chromium-browser"
+                fi
+
+                # Chromium uses fixed paths for libv4l2.so
+                chroot ${chroot_dir} /bin/bash -c "ln -rsf /usr/lib/*/libv4l2.so /usr/lib/"
+                chroot ${chroot_dir} /bin/bash -c "[ -e /usr/lib/aarch64-linux-gnu/ ] && ln -Tsf lib /usr/lib64"
+
+                # Config file for mpv
+                cp ${overlay_dir}/etc/mpv/mpv.conf ${chroot_dir}/etc/mpv/mpv.conf
+
+                # Use mpv as the default video player
+                sed -i 's/org\.gnome\.Totem\.desktop/mpv\.desktop/g' ${chroot_dir}/usr/share/applications/gnome-mimeapps.list 
+
+                # Config file for xorg
+                mkdir -p ${chroot_dir}/etc/X11/xorg.conf.d
+                cp ${overlay_dir}/etc/X11/xorg.conf.d/20-modesetting.conf ${chroot_dir}/etc/X11/xorg.conf.d/20-modesetting.conf
+
+                # Set chromium inital prefrences
+                mkdir -p ${chroot_dir}/usr/lib/chromium-browser
+                cp ${overlay_dir}/usr/lib/chromium-browser/initial_preferences ${chroot_dir}/usr/lib/chromium-browser/initial_preferences
+
+                # Set chromium default launch args
+                mkdir -p ${chroot_dir}/usr/lib/chromium-browser
+                cp ${overlay_dir}/etc/chromium-browser/default ${chroot_dir}/etc/chromium-browser/default
+
+                # Set chromium as default browser
+                chroot ${chroot_dir} /bin/bash -c "update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/chromium-browser 500"
+                chroot ${chroot_dir} /bin/bash -c "update-alternatives --set x-www-browser /usr/bin/chromium-browser"
+                sed -i 's/firefox-esr\.desktop/chromium-browser\.desktop/g;s/firefox\.desktop;//g' ${chroot_dir}/usr/share/applications/gnome-mimeapps.list 
+
+                # Add chromium to favorites bar
+                mkdir -p ${chroot_dir}/etc/dconf/db/local.d
+                cp ${overlay_dir}/etc/dconf/db/local.d/00-favorite-apps ${chroot_dir}/etc/dconf/db/local.d/00-favorite-apps
+                cp ${overlay_dir}/etc/dconf/profile/user ${chroot_dir}/etc/dconf/profile/user
+                chroot ${chroot_dir} /bin/bash -c "dconf update"
             fi
-
-            # Chromium uses fixed paths for libv4l2.so
-            chroot ${chroot_dir} /bin/bash -c "ln -rsf /usr/lib/*/libv4l2.so /usr/lib/"
-            chroot ${chroot_dir} /bin/bash -c "[ -e /usr/lib/aarch64-linux-gnu/ ] && ln -Tsf lib /usr/lib64"
-
-            # Config file for mpv
-            cp ${overlay_dir}/etc/mpv/mpv.conf ${chroot_dir}/etc/mpv/mpv.conf
-
-            # Use mpv as the default video player
-            sed -i 's/org\.gnome\.Totem\.desktop/mpv\.desktop/g' ${chroot_dir}/usr/share/applications/gnome-mimeapps.list 
-
-            # Config file for xorg
-            mkdir -p ${chroot_dir}/etc/X11/xorg.conf.d
-            cp ${overlay_dir}/etc/X11/xorg.conf.d/20-modesetting.conf ${chroot_dir}/etc/X11/xorg.conf.d/20-modesetting.conf
-
-            # Set chromium inital prefrences
-            mkdir -p ${chroot_dir}/usr/lib/chromium-browser
-            cp ${overlay_dir}/usr/lib/chromium-browser/initial_preferences ${chroot_dir}/usr/lib/chromium-browser/initial_preferences
-
-            # Set chromium default launch args
-            mkdir -p ${chroot_dir}/usr/lib/chromium-browser
-            cp ${overlay_dir}/etc/chromium-browser/default ${chroot_dir}/etc/chromium-browser/default
-
-            # Set chromium as default browser
-            chroot ${chroot_dir} /bin/bash -c "update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/chromium-browser 500"
-            chroot ${chroot_dir} /bin/bash -c "update-alternatives --set x-www-browser /usr/bin/chromium-browser"
-            sed -i 's/firefox-esr\.desktop/chromium-browser\.desktop/g;s/firefox\.desktop;//g' ${chroot_dir}/usr/share/applications/gnome-mimeapps.list 
-
-            # Add chromium to favorites bar
-            mkdir -p ${chroot_dir}/etc/dconf/db/local.d
-            cp ${overlay_dir}/etc/dconf/db/local.d/00-favorite-apps ${chroot_dir}/etc/dconf/db/local.d/00-favorite-apps
-            cp ${overlay_dir}/etc/dconf/profile/user ${chroot_dir}/etc/dconf/profile/user
-            chroot ${chroot_dir} /bin/bash -c "dconf update"
         fi
     fi
 
@@ -207,7 +211,7 @@ for type in $target; do
     umount -lf ${chroot_dir}/* 2> /dev/null || true
 
     # Tar the entire rootfs
-    cd ${chroot_dir} && tar -cpf ../ubuntu-22.04.3-${type}-arm64-"${BOARD}".rootfs.tar . && cd .. && rm -rf ${chroot_dir}
-    ../scripts/build-image.sh ubuntu-22.04.3-${type}-arm64-"${BOARD}".rootfs.tar
-    rm -f ubuntu-22.04.3-${type}-arm64-"${BOARD}".rootfs.tar
+    cd ${chroot_dir} && tar -cpf ../ubuntu-${RELASE_VERSION}-${type}-arm64-"${BOARD}".rootfs.tar . && cd .. && rm -rf ${chroot_dir}
+    ../scripts/build-image.sh ubuntu-${RELASE_VERSION}-${type}-arm64-"${BOARD}".rootfs.tar
+    rm -f ubuntu-${RELASE_VERSION}-${type}-arm64-"${BOARD}".rootfs.tar
 done

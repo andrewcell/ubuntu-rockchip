@@ -12,15 +12,15 @@ cd "$(dirname -- "$(readlink -f -- "$0")")" && cd ..
 mkdir -p build && cd build
 
 if [[ ${DESKTOP_ONLY} == "Y" ]]; then
-    if [[ -f ubuntu-22.04.3-preinstalled-desktop-arm64.rootfs.tar.xz ]]; then
+    if [[ -f ubuntu-${RELASE_VERSION}-preinstalled-desktop-arm64.rootfs.tar.xz ]]; then
         exit 0
     fi
 elif [[ ${SERVER_ONLY} == "Y" ]]; then
-    if [[ -f ubuntu-22.04.3-preinstalled-server-arm64.rootfs.tar.xz ]]; then
+    if [[ -f ubuntu-${RELASE_VERSION}-preinstalled-server-arm64.rootfs.tar.xz ]]; then
         exit 0
     fi
 else
-    if [[ -f ubuntu-22.04.3-preinstalled-server-arm64.rootfs.tar.xz && -f ubuntu-22.04.3-preinstalled-desktop-arm64.rootfs.tar.xz ]]; then
+    if [[ -f ubuntu-${RELASE_VERSION}-preinstalled-server-arm64.rootfs.tar.xz && -f ubuntu-${RELASE_VERSION}-preinstalled-desktop-arm64.rootfs.tar.xz ]]; then
         exit 0
     fi
 fi
@@ -35,7 +35,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 # Debootstrap options
 arch=arm64
-release=jammy
+release="${RELEASE}"
 mirror=http://ports.ubuntu.com/ubuntu-ports
 chroot_dir=rootfs
 overlay_dir=../overlay
@@ -47,7 +47,7 @@ rm -rf ${chroot_dir}
 mkdir -p ${chroot_dir}
 
 # Install the base system into a directory 
-debootstrap --arch ${arch} ${release} ${chroot_dir} ${mirror}
+debootstrap --arch "${arch}" "${release}" "${chroot_dir}" "${mirror}"
 
 # Use a more complete sources.list file 
 cat > ${chroot_dir}/etc/apt/sources.list << EOF
@@ -105,23 +105,22 @@ mount -o bind /dev/pts ${chroot_dir}/dev/pts
 # Package priority for ppa
 cp ${overlay_dir}/etc/apt/preferences.d/rockchip-ppa ${chroot_dir}/etc/apt/preferences.d/rockchip-ppa
 
-# Download and update packages
+# Update localisation files
+chroot ${chroot_dir} /bin/bash -c "locale-gen en_US.UTF-8"
+chroot ${chroot_dir} /bin/bash -c "update-locale LANG='en_US.UTF-8'"
+
+# Add the rockchip ppa
+chroot ${chroot_dir} /bin/bash -c "apt-get -y update && apt-get -y install software-properties-common"
+chroot ${chroot_dir} /bin/bash -c "add-apt-repository -y ppa:jjriek/wip"
+
+# Download and update installed packages
+chroot ${chroot_dir} /bin/bash -c "apt-get -y update && apt-get -y upgrade && apt-get -y dist-upgrade"
+
+# Download and install generic packages
 cat << EOF | chroot ${chroot_dir} /bin/bash
 set -eE 
 trap 'echo Error: in $0 on line $LINENO' ERR
 
-# Update localisation files
-locale-gen en_US.UTF-8
-update-locale LANG="en_US.UTF-8"
-
-# Add the rockchip ppa
-apt-get -y update && apt-get -y install software-properties-common
-add-apt-repository -y ppa:jjriek/rockchip
-
-# Download and update installed packages
-apt-get -y update && apt-get -y upgrade && apt-get -y dist-upgrade
-
-# Download and install generic packages
 apt-get -y install dmidecode mtd-tools i2c-tools u-boot-tools cloud-init \
 bash-completion man-db manpages nano gnupg initramfs-tools mmc-utils rfkill \
 ubuntu-drivers-common ubuntu-server dosfstools mtools parted ntfs-3g zip atop \
@@ -130,13 +129,13 @@ net-tools wireless-tools openssh-client openssh-server wpasupplicant ifupdown \
 pigz wget curl lm-sensors bluez gdisk usb-modeswitch usb-modeswitch-data make \
 gcc libc6-dev bison libssl-dev flex fake-hwclock wireless-regdb psmisc rsync \
 uuid-runtime linux-firmware rockchip-firmware cloud-initramfs-growroot flash-kernel
+EOF
 
 # Remove cryptsetup and needrestart
-apt-get -y remove cryptsetup needrestart
+chroot ${chroot_dir} /bin/bash -c "apt-get -y remove cryptsetup needrestart"
 
 # Clean package cache
-apt-get -y autoremove && apt-get -y clean && apt-get -y autoclean
-EOF
+chroot ${chroot_dir} /bin/bash -c "apt-get -y autoremove && apt-get -y clean && apt-get -y autoclean"
 
 # Add flash kernel override
 cat << EOF >> ${chroot_dir}/etc/flash-kernel/db
@@ -212,7 +211,7 @@ umount -lf ${chroot_dir}/dev/pts 2> /dev/null || true
 umount -lf ${chroot_dir}/* 2> /dev/null || true
 
 # Tar the entire rootfs
-[[ ${DESKTOP_ONLY} != "Y" ]] && cd ${chroot_dir} && XZ_OPT="-3 -T0" tar -cpJf ../ubuntu-22.04.3-preinstalled-server-arm64.rootfs.tar.xz . && cd ..
+[[ ${DESKTOP_ONLY} != "Y" ]] && cd ${chroot_dir} && XZ_OPT="-3 -T0" tar -cpJf "../ubuntu-${RELASE_VERSION}-preinstalled-server-arm64.rootfs.tar.xz" . && cd ..
 [[ ${SERVER_ONLY} == "Y" ]] && exit 0
 
 # Mount the temporary API filesystems
@@ -295,4 +294,4 @@ umount -lf ${chroot_dir}/dev/pts 2> /dev/null || true
 umount -lf ${chroot_dir}/* 2> /dev/null || true
 
 # Tar the entire rootfs
-cd ${chroot_dir} && XZ_OPT="-3 -T0" tar -cpJf ../ubuntu-22.04.3-preinstalled-desktop-arm64.rootfs.tar.xz . && cd ..
+cd ${chroot_dir} && XZ_OPT="-3 -T0" tar -cpJf "../ubuntu-${RELASE_VERSION}-preinstalled-desktop-arm64.rootfs.tar.xz" . && cd ..

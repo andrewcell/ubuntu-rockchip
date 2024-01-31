@@ -7,10 +7,11 @@ cd "$(dirname -- "$(readlink -f -- "$0")")"
 
 usage() {
 cat << HEREDOC
-Usage: $0 --board=[orangepi-5|orangepi-5b|orangepi-5-plus|armsom-w3|armsom-sige7|rock-5b|rock-5a|rock-5-itx|radxa-nx5-io|radxa-cm5-io|nanopc-t6|nanopi-r6c|nanopi-r6s|indiedroid-nova|mixtile-blade3|mixtile-core3588e|lubancat-4|turing-rk1|roc-rk3588s-pc]
+Usage: $0 --board=[orangepi-5] --release=[jammy]
 
 Required arguments:
   -b, --board=BOARD      target board 
+  -r, --release=RELEASE  ubuntu release
 
 Optional arguments:
   -h,  --help            show this help message and exit
@@ -46,7 +47,15 @@ for i in "$@"; do
             ;;
         -b|--board)
             export BOARD="${2}"
+            shift 2
+            ;;
+        -r=*|--release=*)
+            export RELEASE="${i#*=}"
             shift
+            ;;
+        -r|--release)
+            export RELEASE="${2}"
+            shift 2
             ;;
         -d|--docker)
             DOCKER="docker run --privileged --network=host --rm -it -v \"$(pwd)\":/opt -e BOARD -e VENDOR -e LAUNCHPAD -e MAINLINE -e SERVER_ONLY -e DESKTOP_ONLY -e KERNEL_ONLY -e UBOOT_ONLY ubuntu-rockchip-build /bin/bash"
@@ -127,6 +136,20 @@ done
 # Exit with error if invalid board
 if [[ -z ${BOARD_NAME} ]]; then
     echo "Error: \"${BOARD}\" is an unsupported board"
+    exit 1
+fi
+
+# Read release configuration files
+for file in config/releases/*; do
+    if [ "${RELEASE}" == "$(basename "${file%.sh}")" ]; then
+        # shellcheck source=/dev/null
+        source "${file}"
+    fi
+done
+
+# Exit with error if invalid release
+if [[ -z ${RELASE_NAME} ]]; then
+    echo "Error: \"${RELEASE}\" is an unsupported release"
     exit 1
 fi
 
