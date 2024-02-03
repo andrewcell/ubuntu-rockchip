@@ -7,11 +7,12 @@ cd "$(dirname -- "$(readlink -f -- "$0")")"
 
 usage() {
 cat << HEREDOC
-Usage: $0 --board=[orangepi-5] --release=[jammy]
+Usage: $0 --board=[orangepi-5] --release=[jammy|mantic] --release=[preinstalled-desktop|preinstalled-server]
 
 Required arguments:
   -b, --board=BOARD      target board 
   -r, --release=RELEASE  ubuntu release
+  -p, --project=PROJECT  ubuntu project
 
 Optional arguments:
   -h,  --help            show this help message and exit
@@ -55,6 +56,14 @@ for i in "$@"; do
             ;;
         -r|--release)
             export RELEASE="${2}"
+            shift 2
+            ;;
+        -p=*|--project=*)
+            export PROJECT="${i#*=}"
+            shift
+            ;;
+        -p|--project)
+            export PROJECT="${2}"
             shift 2
             ;;
         -d|--docker)
@@ -111,7 +120,7 @@ if [[ "${KERNEL_TARGET}" != "mainline" ]]; then
 fi
 
 # No board param passed
-if [[ -z ${BOARD} ]]; then
+if [ -z "${BOARD}" ] || [ -z "${RELEASE}" ] || [ -z "${PROJECT}" ]; then
     usage
     exit 1
 fi
@@ -150,6 +159,12 @@ done
 # Exit with error if invalid release
 if [[ -z ${RELASE_NAME} ]]; then
     echo "Error: \"${RELEASE}\" is an unsupported release"
+    exit 1
+fi
+
+# Exit with error if invalid project
+if [[ ! "${PROJECT}" =~ ^(preinstalled-server|preinstalled-desktop)$ ]]; then
+    echo "Error: \"${PROJECT}\" is an unsupported project"
     exit 1
 fi
 
