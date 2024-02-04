@@ -135,38 +135,43 @@ if [[ ${CLEAN} == "Y" ]]; then
 fi
 
 # Read board configuration files
-for file in config/boards/*; do
-    if [ "${BOARD}" == "$(basename "${file%.conf}")" ]; then
-        # shellcheck source=/dev/null
-        set -o allexport && source "${file}" && set +o allexport
-    fi
-done
-
-# Exit with error if invalid board
-if [[ -z ${BOARD_NAME} ]]; then
+while :; do
+    for file in config/boards/*; do
+        if [ "${BOARD}" == "$(basename "${file%.conf}")" ]; then
+            # shellcheck source=/dev/null
+            set -o allexport && source "${file}" && set +o allexport
+            break 2
+        fi
+    done
     echo "Error: \"${BOARD}\" is an unsupported board"
     exit 1
-fi
-
-# Read release configuration files
-for file in config/releases/*; do
-    if [ "${RELEASE}" == "$(basename "${file%.sh}")" ]; then
-        # shellcheck source=/dev/null
-        source "${file}"
-    fi
 done
 
-# Exit with error if invalid release
-if [[ -z ${RELASE_NAME} ]]; then
+# Read release configuration files
+while :; do
+    for file in config/releases/*; do
+        if [ "${RELEASE}" == "$(basename "${file%.sh}")" ]; then
+            # shellcheck source=/dev/null
+            source "${file}"
+            break 2
+        fi
+    done
     echo "Error: \"${RELEASE}\" is an unsupported release"
     exit 1
-fi
+done
 
-# Exit with error if invalid project
-if [[ ! "${PROJECT}" =~ ^(preinstalled-server|preinstalled-desktop)$ ]]; then
+# Read project configuration files
+while :; do
+    for file in config/projects/*; do
+        if [ "${PROJECT}" == "$(basename "${file%.sh}")" ]; then
+            # shellcheck source=/dev/null
+            source "${file}"
+            break 2
+        fi
+    done
     echo "Error: \"${PROJECT}\" is an unsupported project"
     exit 1
-fi
+done
 
 # Start logging the build process
 mkdir -p build/logs && exec > >(tee "build/logs/build-$(date +"%Y%m%d%H%M%S").log") 2>&1

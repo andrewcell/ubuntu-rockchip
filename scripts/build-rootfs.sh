@@ -69,12 +69,8 @@ export DEBIAN_FRONTEND=noninteractive
 arch=arm64
 release="${RELEASE}"
 mirror=http://ports.ubuntu.com/ubuntu-ports
-chroot_dir=chroot
+chroot_dir=rootfs
 overlay_dir=../overlay
-
-# Package lists
-package_list=()
-package_removal_list=()
 
 # Clean chroot dir and make sure folder is not mounted
 umount -lf ${chroot_dir}/dev/pts 2> /dev/null || true
@@ -146,50 +142,12 @@ chroot ${chroot_dir} update-locale LANG="en_US.UTF-8"
 chroot ${chroot_dir} apt-get -y update
 chroot ${chroot_dir} apt-get -y upgrade 
 chroot ${chroot_dir} apt-get -y dist-upgrade
+chroot ${chroot_dir} apt-get -y install dctrl-tools
 
-chroot ${chroot_dir} apt-get -y install software-properties-common dctrl-tools
-
-# Install minimal and standard ubuntu packages
-add_task minimal standard
-
-case "${PROJECT}" in
-    preinstalled-server)
-        add_task server
-
-        # Cloud utils
-        add_package cloud-init landscape-common
-
-        remove_package cryptsetup needrestart
-        ;;
-    preinstalled-desktop)
-        add_task ubuntu-desktop
-
-        # OEM installer
-        add_package oem-config-gtk ubiquity-frontend-gtk
-        add_package ubiquity-slideshow-ubuntu language-pack-en-base
-
-        # Audio 
-        add_package pulseaudio pavucontrol
-        
-        # Media playback
-        add_package mpv
-
-        # Misc
-        add_package dbus-x11
-
-        remove_package cloud-init landscape-common cryptsetup-initramfs
-        ;;
-esac
-
-# Add tools and firmware
-add_package fake-hwclock i2c-tools u-boot-tools mmc-utils flash-kernel wpasupplicant
-add_package linux-firmware psmisc wireless-regdb cloud-initramfs-growroot
-
-# Install packages
-chroot ${chroot_dir} apt-get install -y "${package_list[@]}"
-
-# Remove packages
-chroot ${chroot_dir} apt-get purge -y "${package_removal_list[@]}"
+# Run build rootfs hook to handle project specific changes
+if [[ $(type -t build_rootfs_hook__"${PROJECT}") == function ]]; then
+    build_rootfs_hook__"${PROJECT}"
+fi 
 
 # DNS
 echo "nameserver 8.8.8.8" > ${chroot_dir}/etc/resolv.conf
@@ -256,135 +214,6 @@ chroot ${chroot_dir} /bin/bash -c "ln -s ../mkswap.service /usr/lib/systemd/syst
     echo "What=/swapfile"
 ) > ${chroot_dir}/usr/lib/systemd/system/swapfile.swap
 chroot ${chroot_dir} /bin/bash -c "ln -s ../swapfile.swap /usr/lib/systemd/system/swap.target.wants/"
-
-case "${PROJECT}" in
-    preinstalled-server)
-        # Hostname
-        echo "ubuntu" > ${chroot_dir}/etc/hostname
-
-        # Hosts file
-        (
-            echo "127.0.0.1 localhost"
-            echo ""
-            echo "# The following lines are desirable for IPv6 capable hosts"
-            echo "::1 ip6-localhost ip6-loopback"
-            echo "fe00::0 ip6-localnet"
-            echo "ff00::0 ip6-mcastprefix"
-            echo "ff02::1 ip6-allnodes"
-            echo "ff02::2 ip6-allrouters"
-            echo "ff02::3 ip6-allhosts"
-        ) > ${chroot_dir}/etc/hosts
-
-        # Cloud init no cloud config
-        (
-            echo "# configure cloud-init for NoCloud"
-            echo "datasource_list: [ NoCloud, None ]"
-            echo "datasource:"
-            echo "  NoCloud:"
-            echo "    fs_label: system-boot"
-        ) > ${chroot_dir}/etc/cloud/cloud.cfg.d/99-fake_cloud.cfg
-
-        # HACK: lower 120 second timeout to 10 seconds
-        mkdir -p ${chroot_dir}/etc/systemd/system/systemd-networkd-wait-online.service.d/
-        (
-            echo "[Service]"
-            echo "ExecStart="
-            echo "ExecStart=/lib/systemd/systemd-networkd-wait-online --timeout=10"
-        ) > ${chroot_dir}/etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
-        ;;
-    preinstalled-desktop)
-        # Create files/dirs Ubiquity requires
-        mkdir -p ${chroot_dir}/var/log/installer
-        touch ${chroot_dir}/var/log/installer/debug
-        touch ${chroot_dir}/var/log/syslog
-        chroot ${chroot_dir} chown syslog:adm /var/log/syslog
-
-        # Create the oem user account
-        chroot ${chroot_dir} /usr/sbin/useradd -d /home/oem -G adm,sudo -m -N -u 29999 oem
-        chroot ${chroot_dir} /usr/sbin/oem-config-prepare --quiet
-        chroot ${chroot_dir} touch /var/lib/oem-config/run
-
-        rm -rf ${chroot_dir}/boot/grub/
-
-        # Hostname
-        echo "localhost.localdomain" > ${chroot_dir}/etc/hostname
-
-        # Hosts file
-        (
-            echo "127.0.0.1	localhost.localdomain	localhost"
-            echo "::1		localhost6.localdomain6	localhost6"
-            echo ""
-            echo "# The following lines are desirable for IPv6 capable hosts"
-            echo "::1     localhost ip6-localhost ip6-loopback"
-            echo "fe00::0 ip6-localnet"
-            echo "ff02::1 ip6-allnodes"
-            echo "ff02::2 ip6-allrouters"
-            echo "ff02::3 ip6-allhosts"
-        ) > ${chroot_dir}/etc/hosts
-
-        # Have plymouth use the framebuffer
-        mkdir -p ${chroot_dir}/etc/initramfs-tools/conf-hooks.d
-        (
-            echo "if which plymouth >/dev/null 2>&1; then"
-            echo "    FRAMEBUFFER=y"
-            echo "fi"
-        ) > ${chroot_dir}/etc/initramfs-tools/conf-hooks.d/plymouth
-
-        # Mouse lag/stutter (missed frames) in Wayland sessions
-        # https://bugs.launchpad.net/ubuntu/+source/mutter/+bug/1982560
-        (
-            echo "MUTTER_DEBUG_ENABLE_ATOMIC_KMS=0"
-            echo "MUTTER_DEBUG_FORCE_KMS_MODE=simple"
-            echo "CLUTTER_PAINT=disable-dynamic-max-render-time"
-        ) >> ${chroot_dir}/etc/environment
-
-        # Enable wayland session
-        sed -i 's/#WaylandEnable=false/WaylandEnable=true/g' ${chroot_dir}/etc/gdm3/custom.conf
-
-        # Use NetworkManager by default
-        mkdir -p ${chroot_dir}/etc/netplan
-        (
-            echo "# Let NetworkManager manage all devices on this system"
-            echo "network:"
-            echo "  version: 2"
-            echo "  renderer: NetworkManager"
-        ) > ${chroot_dir}/etc/netplan/01-network-manager-all.yaml
-
-        # Networking interfaces
-        (
-            echo "[main]"
-            echo "plugins=ifupdown,keyfile"
-            echo "dhcp=internal"
-            echo ""
-            echo "[ifupdown]"
-            echo "managed=true"
-            echo ""
-            echo "[device]"
-            echo "wifi.scan-rand-mac-address=no"
-        ) > ${chroot_dir}/etc/NetworkManager/NetworkManager.conf
-
-        # Manage network interfaces
-        (
-            echo "[keyfile]"
-            echo "unmanaged-devices=*,except:type:wifi,except:type:ethernet,except:type:gsm,except:type:cdma"
-        ) > ${chroot_dir}/usr/lib/NetworkManager/conf.d/10-globally-managed-devices.conf
-
-        # Disable random wifi mac address
-        (
-            echo "[connection]"
-            echo "wifi.mac-address-randomization=1"
-            echo ""
-            echo "[device]"
-            echo "wifi.scan-rand-mac-address=no"
-        ) > ${chroot_dir}/usr/lib/NetworkManager/conf.d/10-globally-managed-devices.conf
-
-        # Disable wifi powersave
-        (
-            echo "[connection]"
-            echo "wifi.powersave = 2"
-        ) > ${chroot_dir}/usr/lib/NetworkManager/conf.d/20-override-wifi-powersave-disable.conf
-        ;;
-esac
 
 # Clean package cache
 chroot ${chroot_dir} apt-get -y autoremove
