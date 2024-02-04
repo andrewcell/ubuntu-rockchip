@@ -119,6 +119,27 @@ if [[ "${KERNEL_TARGET}" != "mainline" ]]; then
     export KERNEL_TARGET=bsp
 fi
 
+if [ "${BOARD}" == "help" ]; then
+    for file in config/boards/*; do
+        basename "${file%.conf}"
+    done
+    exit 0
+fi
+
+if [ "${RELEASE}" == "help" ]; then
+    for file in config/releases/*; do
+        basename "${file%.sh}"
+    done
+    exit 0
+fi
+
+if [ "${PROJECT}" == "help" ]; then
+    for file in config/projects/*; do
+        basename "${file%.sh}"
+    done
+    exit 0
+fi
+
 # No board param passed
 if [ -z "${BOARD}" ] || [ -z "${RELEASE}" ] || [ -z "${PROJECT}" ]; then
     usage
