@@ -7,7 +7,7 @@ cd "$(dirname -- "$(readlink -f -- "$0")")"
 
 usage() {
 cat << HEREDOC
-Usage: $0 --board=[orangepi-5] --release=[jammy|mantic] --release=[preinstalled-desktop|preinstalled-server]
+Usage: $0 --board=[orangepi-5] --release=[jammy|mantic] --project=[preinstalled-desktop|preinstalled-server]
 
 Required arguments:
   -b, --board=BOARD      target board 
@@ -36,14 +36,14 @@ fi
 
 cd "$(dirname -- "$(readlink -f -- "$0")")"
 
-for i in "$@"; do
-    case $i in
+while [ "$#" -gt 0 ]; do
+    case "${1}" in
         -h|--help)
             usage
             exit 0
             ;;
         -b=*|--board=*)
-            export BOARD="${i#*=}"
+            export BOARD="${1#*=}"
             shift
             ;;
         -b|--board)
@@ -51,7 +51,7 @@ for i in "$@"; do
             shift 2
             ;;
         -r=*|--release=*)
-            export RELEASE="${i#*=}"
+            export RELEASE="${1#*=}"
             shift
             ;;
         -r|--release)
@@ -59,7 +59,7 @@ for i in "$@"; do
             shift 2
             ;;
         -p=*|--project=*)
-            export PROJECT="${i#*=}"
+            export PROJECT="${1#*=}"
             shift
             ;;
         -p|--project)
@@ -101,16 +101,18 @@ for i in "$@"; do
             ;;
         -c|--clean)
             export CLEAN=Y
+            shift
             ;;
         -v|--verbose)
             set -x
             shift
             ;;
         -*)
-            echo "Error: unknown argument \"$i\""
+            echo "Error: unknown argument \"${1}\""
             exit 1
             ;;
         *)
+            shift
             ;;
     esac
 done
