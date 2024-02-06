@@ -3,33 +3,6 @@
 set -eE 
 trap 'echo Error: in $0 on line $LINENO' ERR
 
-add_package() {
-    local package
-
-    for package in "$@"; do
-        package_list+=("${package}")
-    done
-}
-
-remove_package() {
-    local package
-
-    for package in "$@"; do
-        package_removal_list+=("${package}")
-    done
-}
-
-add_task() {
-    local task
-    local package
-
-    for task in "$@"; do
-        for package in $(chroot ${chroot_dir} apt-cache dumpavail | grep-dctrl -nsPackage \( -XFArchitecture arm64 -o -XFArchitecture all \) -a -wFTask "${task}"); do
-            package_list+=("${package}")
-        done
-    done
-}
-
 if [ "$(id -u)" -ne 0 ]; then 
     echo "Please run as root"
     exit 1
@@ -56,6 +29,9 @@ fi
 if [[ -f "ubuntu-${RELASE_VERSION}-${PROJECT}-arm64.rootfs.tar.xz" ]]; then
     exit 0
 fi
+
+# shellcheck source=/dev/null
+source ../config/projects/"${PROJECT}.sh"
 
 # These env vars can cause issues with chroot
 unset TMP

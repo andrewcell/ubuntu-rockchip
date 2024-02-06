@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 
 package_list=(
-    oem-config-gtk ubiquity-frontend-gtk ubiquity-slideshow-ubuntu language-pack-en-base pulseaudio pavucontrol mpv dbus-x11
+    oem-config-gtk ubiquity-frontend-gtk ubiquity-slideshow-ubuntu language-pack-en-base pavucontrol mpv dbus-x11
     i2c-tools u-boot-tools mmc-utils flash-kernel wpasupplicant linux-firmware psmisc wireless-regdb cloud-initramfs-growroot
 )
 
