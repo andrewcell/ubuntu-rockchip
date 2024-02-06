@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 
 package_list=(
-    oem-config-gtk ubiquity-frontend-gtk ubiquity-slideshow-ubuntu language-pack-en-base pavucontrol mpv dbus-x11
-    i2c-tools u-boot-tools mmc-utils flash-kernel wpasupplicant linux-firmware psmisc wireless-regdb cloud-initramfs-growroot
+    oem-config-gtk ubiquity-frontend-gtk ubiquity-slideshow-ubuntu language-pack-en-base mpv dbus-x11
+    i2c-tools u-boot-tools mmc-utils flash-kernel wpasupplicant linux-firmware psmisc wireless-regdb
+    cloud-initramfs-growroot
 )
 
 package_removal_list=(
@@ -27,6 +28,8 @@ function build_rootfs_hook__preinstalled-desktop() {
     # Remove packages
     chroot "${chroot_dir}" apt-get purge -y "${package_removal_list[@]}"
 
+    chroot "${chroot_dir}" apt-get install -y pulseaudio pavucontrol
+    
     # Create files/dirs Ubiquity requires
     mkdir -p "${chroot_dir}/var/log/installer"
     chroot "${chroot_dir}" touch /var/log/installer/debug
